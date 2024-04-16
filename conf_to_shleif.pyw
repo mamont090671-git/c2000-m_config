@@ -181,9 +181,36 @@ def Read_Txt(command='1'):
         12: ['нет']
     }  #    TODO сценарии, управление реле
     mask = {
-        1: [],
-        2: [],
-        3: []
+        1: ['****************'],
+        2: ['----------------'],
+        3: ['********--------'],
+        4: ['--------********'],
+        5: ['****----****----'],
+        6: ['----****----****'],
+        7: ['****------------'],
+        8: ['----************'],
+        9: ['**--**--**--**--'],
+        10:['--**--**--**--**'],
+        11:['**----**----**--'],
+        12:['--****--****--**'],
+        13:['**--------------'],
+        14:['--**************'],
+        15:['**--**__********'],
+        16:['--**--**--------'],
+        17:['*-*-*-*-*-*-*-*-'],
+        18:['-*-*-*-*-*-*-*-*'],
+        19:['*--*--*--*--*--*'],
+        20:['-**-**-**-**-**-'],
+        21:['*-------*-------'],
+        22:['-*******-*******'],
+        23:['*---------------'],
+        24:['-***************'],
+        25:['*-*-----*-*-----'],
+        26:['-*-*****-*-*****'],
+        27:['*-*-------------'],
+        28:['-*-*************'],
+        29:['*-*-*-----------'],
+        30:['-*-*-***********']
     }         #    TODO маска мигания
     section = dict()    #    TODO разделы
 
@@ -192,7 +219,7 @@ def Read_Txt(command='1'):
         for row in ws[cell_range]:
             for cell in row:
                 cell.border = Border(top=thin, bottom=thin)
-    def exls_w_adr(row=1, column=1, list_str=None, bold=False):
+    def exls_w_adr(row=1, column=1, list_str=None, bold=True):
         title_sh = ['', 'Шлейф', 'Раздел', 'Тип шлейфа', '', 'Описание']
         thins = Side(border_style="hair", color="000000")
         #   TODO заполняем строку адреса
@@ -225,7 +252,7 @@ def Read_Txt(command='1'):
             column += 1
         row += 1
         return row
-    def exls_w_out(row=1, column=1, list_str=None, bold=False):
+    def exls_w_out(row=1, column=1, list_str=None, bold=True):
         thins = Side(border_style="hair", color="000000")
         group_start = row
         level = 1
@@ -295,7 +322,7 @@ def Read_Txt(command='1'):
         ws.row_dimensions.group(start=group_start, end=row, outline_level=level, hidden=False)
         row += 1
         return row
-    def exls_w_titul(row=1, column=1, list_str=None, bold=False):
+    def exls_w_titul(row=1, column=1, list_str=None, bold=True):
         ws.merge_cells('A1:C1')
         for cel in list_str:
             if cel.find('Конфигурация ') != -1: column = 1
@@ -402,6 +429,7 @@ def Read_Txt(command='1'):
     #   TODO создаем xlsx таблицу
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = 'Адреса, шлейфа'
     #   TODO заполняем именованный массив с разделами
     for l in lines:
         tes = l.replace('\n', '').split(', ')
@@ -437,13 +465,13 @@ def Read_Txt(command='1'):
                 if str_array[0].find('Конфигурация') != -1: tt = exls_w_titul(1, 1, str_array, True)
                 if str_array[0].find('Версия:') != -1: tt = exls_w_titul(1, 1, str_array, True)
                 #   TODO Заполняем строку с адресом и типом прибора
-                if str_array.__len__() >= 3 and str_array[0].find('Адрес:') != -1: tt = exls_w_adr(tt, 1, str_array, True)
+                if str_array.__len__() >= 3 and str_array[0].find('Адрес:') != -1: tt = exls_w_adr(tt, 1, str_array)
                 #   TODO Заполняем строку с Шлейфом и описанием
-                if str_array.__len__() >= 3 and str_array[0].find('Шлейф:') != -1: tt = exls_w_out(tt, 2, str_array, True)
+                if str_array.__len__() >= 3 and str_array[0].find('Шлейф:') != -1: tt = exls_w_out(tt, 2, str_array)
                 #   TODO Заполняем строку с Выходами
-                if str_array.__len__() >= 2 and str_array[0].find('Выход:') != -1: tt = exls_w_out(tt, 2, str_array, True)
+                if str_array.__len__() >= 2 and str_array[0].find('Выход:') != -1: tt = exls_w_out(tt, 2, str_array)
                 #   TODO Заполняем строку с Реле
-                if str_array.__len__() >= 2 and str_array[0].find('Реле:') != -1: tt = exls_w_out(tt, 2, str_array, True)
+                if str_array.__len__() >= 2 and str_array[0].find('Реле:') != -1: tt = exls_w_out(tt, 2, str_array)
                 '''
                 #   TODO Заполняем ссценарии
                 if test1.__len__() >= 3 and test1[0].find('Сценарий_упр:') != -1:
