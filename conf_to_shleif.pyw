@@ -3,9 +3,9 @@
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from openpyxl.worksheet.pagebreak import Break, RowBreak, ColBreak
-from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.formatting import Rule
-from openpyxl.styles.differential import DifferentialStyle
+#from openpyxl.worksheet.datavalidation import DataValidation
+#from openpyxl.formatting import Rule
+#from openpyxl.styles.differential import DifferentialStyle
 import tkinter
 from tkinter import filedialog as fd
 import os
