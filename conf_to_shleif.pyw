@@ -3,9 +3,9 @@
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from openpyxl.worksheet.pagebreak import Break, RowBreak, ColBreak
-#from openpyxl.worksheet.datavalidation import DataValidation
-#from openpyxl.formatting import Rule
-#from openpyxl.styles.differential import DifferentialStyle
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.formatting import Rule
+from openpyxl.styles.differential import DifferentialStyle
 import tkinter
 from tkinter import filedialog as fd
 import os
@@ -79,7 +79,7 @@ def Read_Txt(command='1'):
         66: ["Рупор исп.03"],
         67: ["Рупор-300"],
         76: ["С2000-PGE исп.01"]
-    }  #    TODO типы приборов
+    }       #    TODO типы приборов
     cable_type = {
         0: ['по умолчанию'],
         1: ['охранный'],
@@ -94,7 +94,7 @@ def Read_Txt(command='1'):
         10: ['ручной пуск'],
         11: ['дистанционный пуск'],
         12: ['состояние автоматики']
-    }  #    TODO типы шлейфов
+    }       #    TODO типы шлейфов
     relay = {
         1: ['включить'],
         2: ['выключить'],
@@ -153,7 +153,7 @@ def Read_Txt(command='1'):
         55: ['выключить при нападении'],
         56: ['лампа 2'],
         57: ['сирена 2']
-    }  #   TODO реле
+    }           #    TODO реле
     cable_script = {
         1: ['Нет'],
         2: ['Снять шлейф'],
@@ -165,7 +165,7 @@ def Read_Txt(command='1'):
         8: ['Запустить АУП'],
         9: ['Вкл. режим тестирования'],
         10: ['Откл. режим тестирования']
-    }  #   TODO сценарии, управление шлейфом
+    }   #    TODO сценарии, управление шлейфом
     relay_script = {
         1: ['включить'],
         2: ['выключить'],
@@ -184,8 +184,8 @@ def Read_Txt(command='1'):
         1: [],
         2: [],
         3: []
-    }  #      TODO маска мигания
-    section = dict()  #   TODO разделы
+    }         #    TODO маска мигания
+    section = dict()    #    TODO разделы
 
     def set_border(ws=None, cell_range='A1:F1'):
         thin = Side(border_style="thin", color="000000")
@@ -410,40 +410,40 @@ def Read_Txt(command='1'):
             section[te] = tes[1]
     i = 1  # TODO index string of file cfg
     tt = 1  # TODO row count
-    for lin in lines:
+    for string_f in lines:
         #   TODO пропускаем первые строки файла
         if i >= 1:
             #   TODO пропускаем пустые строки
-            if lin.find('\n') != -1:
+            if string_f.find('\n') != -1:
                 #   TODO    преобразуем строку в массив
-                test1 = lin.replace('\n', '').split(', ')
+                str_array = string_f.replace('\n', '').split(', ')
                 #   TODO удаляем лишние прбелы из начала строки
                 j = 0
-                for h in test1:
+                for h in str_array:
                     if h.find('Описание:') != -1:
-                        test1[j] = h[h.find('Описание:'):]
+                        str_array[j] = h[h.find('Описание:'):]
                     elif h.find('Шлейф:') != -1:
-                        test1[j] = h[h.find('Шлейф:'):]
+                        str_array[j] = h[h.find('Шлейф:'):]
                     elif h.find('Раздел:') != -1:
-                        test1[j] = h[h.find('Раздел:'):]
+                        str_array[j] = h[h.find('Раздел:'):]
                     elif h.find('Время') != -1:
-                        test1[j] = h[h.find('Время'):]
+                        str_array[j] = h[h.find('Время'):]
                     elif h.find('Выход:') != -1:
-                        test1[j] = h[h.find('Выход:'):]
+                        str_array[j] = h[h.find('Выход:'):]
                     elif h.find('Реле:') != -1:
-                        test1[j] = h[h.find('Реле:'):]
+                        str_array[j] = h[h.find('Реле:'):]
                     j += 1
                 #   TODO
-                if test1[0].find('Конфигурация') != -1: tt = exls_w_titul(1, 1, test1, True)
-                if test1[0].find('Версия:') != -1: tt = exls_w_titul(1, 1, test1, True)
+                if str_array[0].find('Конфигурация') != -1: tt = exls_w_titul(1, 1, str_array, True)
+                if str_array[0].find('Версия:') != -1: tt = exls_w_titul(1, 1, str_array, True)
                 #   TODO Заполняем строку с адресом и типом прибора
-                if test1.__len__() >= 3 and test1[0].find('Адрес:') != -1: tt = exls_w_adr(tt, 1, test1, True)
+                if str_array.__len__() >= 3 and str_array[0].find('Адрес:') != -1: tt = exls_w_adr(tt, 1, str_array, True)
                 #   TODO Заполняем строку с Шлейфом и описанием
-                if test1.__len__() >= 3 and test1[0].find('Шлейф:') != -1: tt = exls_w_out(tt, 2, test1, True)
+                if str_array.__len__() >= 3 and str_array[0].find('Шлейф:') != -1: tt = exls_w_out(tt, 2, str_array, True)
                 #   TODO Заполняем строку с Выходами
-                if test1.__len__() >= 2 and test1[0].find('Выход:') != -1: tt = exls_w_out(tt, 2, test1, True)
+                if str_array.__len__() >= 2 and str_array[0].find('Выход:') != -1: tt = exls_w_out(tt, 2, str_array, True)
                 #   TODO Заполняем строку с Реле
-                if test1.__len__() >= 2 and test1[0].find('Реле:') != -1: tt = exls_w_out(tt, 2, test1, True)
+                if str_array.__len__() >= 2 and str_array[0].find('Реле:') != -1: tt = exls_w_out(tt, 2, str_array, True)
                 '''
                 #   TODO Заполняем ссценарии
                 if test1.__len__() >= 3 and test1[0].find('Сценарий_упр:') != -1:
