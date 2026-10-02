@@ -5,8 +5,14 @@
 import os
 import platform
 import subprocess
-from openpyxl import Workbook
-from openpyxl.styles import Font, Border, Side, PatternFill, Alignment
+import sys as _sys
+
+try:
+    from openpyxl import Workbook
+except ImportError:
+    subprocess.check_call([_sys.executable, '-m', 'pip', 'install', 'openpyxl', '-q', '--break-system-packages'])
+    from openpyxl import Workbook
+from openpyxl.styles import Font, Border, Side, PatternFill, Alignment, Color
 from openpyxl.worksheet.pagebreak import Break
 
 
@@ -18,10 +24,12 @@ class ExcelGenerator:
         self.ws = self.wb.active
         self.ws.title = 'Адреса, шлейфа'
         self.current_row = 1
+        self.sections = {}
         self._setup_styles()
     
     def _setup_styles(self):
         """Настроить стили"""
+#        self.thin = Side(border_style="hair")
         self.thin = Side(border_style="thin", color="000000")
         self.bold_font = Font(name='Times New Roman', size=10, bold=True)
         self.regular_font = Font(name='Times New Roman', size=10, italic=True)
@@ -65,7 +73,7 @@ class ExcelGenerator:
                 cell_value = cel[cel.find('Тип_прибора: '):].replace('Тип_прибора: ', '')
                 try:
                     device_id = int(cell_value)
-                    cel = str(self._config.get_device_type(device_id)).strip('[]').strip('\'\'')
+                    cel = str(self._config.get_device_type(device_id))
                 except (ValueError, AttributeError):
                     pass
             if column == 2 and cel.find('Сценарий_упр:') == -1:
@@ -130,7 +138,7 @@ class ExcelGenerator:
             elif cel.find('Программа:') != -1 and str(self.ws.cell(row=row, column=2).value).find('Реле:') != -1:
                 try:
                     int_relay = int(cel.replace(' ', '').replace('Программа:', ''))
-                    cel = 'Пр. упр: ' + str(self._config.get_relay(int_relay)).strip('[]').strip('\'\'')
+                    cel = 'Пр. упр: ' + str(self._config.get_relay(int_relay))
                 except (ValueError, AttributeError):
                     pass
                 if 20 < len(cel) < 30:
@@ -141,7 +149,7 @@ class ExcelGenerator:
             elif cel.find('Тип_шлейфа:') != -1:
                 try:
                     int_cable = int(cel.replace(' ', '').replace('Тип_шлейфа:', ''))
-                    cel = str(self._config.get_cable_type(int_cable)).strip('[]')
+                    cel = str(self._config.get_cable_type(int_cable))
                 except (ValueError, AttributeError):
                     pass
                 self.ws.row_dimensions[row].height = 25
@@ -165,6 +173,10 @@ class ExcelGenerator:
     def set_config(self, config):
         """Установить конфигурацию для доступа к методам"""
         self._config = config
+    
+    def set_sections(self, sections):
+        """Установить разделы"""
+        self.sections = sections
     
     def save(self, filepath):
         """Сохранить файл"""
@@ -205,6 +217,281 @@ class ExcelGenerator:
         """Скрыть столбцы"""
         for col in hidden_cols:
             self.ws.column_dimensions[col].hidden = True
+    
+    def set_devices(self, devices):
+        """Установить список приборов для генерации"""
+        self._devices = devices
+    
+    def generate(self, devices=None):
+        """Сгенерировать Excel из структурированных данных приборов"""
+        if devices is None:
+            devices = getattr(self, '_devices', [])
+        
+        row = 1
+        for dev in devices:
+            row = self._add_device_block(dev, row)
+        
+        # ИСПРАВЛЕНО: Вместо "thick" используем объект границы на основе вашего self.thin
+        # Либо задаем тонкую черную линию напрямую: Side(border_style="thin", color="000000")
+        fine_border = Border(
+            top=self.thin,
+            bottom=self.thin,
+            left=self.thin,
+            right=self.thin
+        )
+        
+        # Применяем тонкую границу ко всем заполненным ячейкам таблицы
+        # (включая 6-й столбец с описанием, так как max_row рассчитывается для всей таблицы)
+        for r in range(1, self.ws.max_row + 1):
+            for c in range(1, 7): 
+                self.ws.cell(row=r, column=c).border = fine_border
+        
+        return row
+    
+    def _add_device_block(self, dev, row):
+        """Добавить блок одного прибора"""
+        # Строка адреса
+        row = self._add_address_header(dev, row)
+        
+        # Шлейфы
+        for shleif in dev.shleifs:
+            row = self._add_shleif_row(shleif, row)
+        
+        # Реле/выходы объединены по номеру
+        # Сначала соберем все реле и добавим к ним описания выходов
+        merged_relays = []
+        output_by_num = {}
+        for o in dev.outputs:
+            output_by_num[o['num']] = o
+        for r in dev.relays:
+            if r.get('program_id') and r['program_id'] != 0:
+                merged = dict(r)
+                if r['num'] in output_by_num:
+                    out = output_by_num[r['num']]
+                    if out.get('description'):
+                        merged['output_desc'] = out['description']
+                    if out.get('section_id') and not merged.get('section_id'):
+                        merged['section_id'] = out['section_id']
+                merged_relays.append(merged)
+        
+        for relay in merged_relays:
+            row = self._add_relay_row(relay, row)
+        
+        # Считыватели
+        for reader in dev.readers:
+            row = self._add_reader_row(reader, row)
+        
+        row += 1  # пустая строка между приборами
+        return row
+    
+    def _add_address_header(self, dev, row):
+        """Добавить строку адреса и заголовок"""
+        title_sh = ['', 'Шлейф', 'Раздел', 'Тип шлейфа', 'Программа', 'Описание']
+        
+        # Строка с адресом
+        self.ws.cell(row=row, column=1, value=dev.addr)
+        self.ws.cell(row=row, column=1).font = self.bold_font
+        self.ws.cell(row=row, column=1).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=1).fill = self.address_fill
+        
+        self.ws.cell(row=row, column=2, value=dev.type_name)
+        self.ws.cell(row=row, column=2).font = self.bold_font
+        self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=2).fill = self.address_fill
+        
+        self.ws.cell(row=row, column=3, value='')
+        self.ws.cell(row=row, column=3).font = self.bold_font
+        self.ws.cell(row=row, column=3).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=3).fill = self.address_fill
+        
+        self.ws.cell(row=row, column=4, value=dev.version)
+        self.ws.cell(row=row, column=4).font = self.bold_font
+        self.ws.cell(row=row, column=4).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=4).fill = self.address_fill
+        
+        # Столбец E (пустой)
+        self.ws.cell(row=row, column=5, value='')
+        self.ws.cell(row=row, column=5).font = self.bold_font
+        self.ws.cell(row=row, column=5).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=5).fill = self.address_fill
+        
+        self.ws.cell(row=row, column=6, value=dev.description)
+        self.ws.cell(row=row, column=6).font = self.bold_font
+        self.ws.cell(row=row, column=6).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=6).fill = self.address_fill
+        self.ws.cell(row=row, column=6).alignment = self.wrap
+        
+        row += 1
+        
+        # Заголовок
+        for i, title in enumerate(title_sh, 1):
+            cell = self.ws.cell(row=row, column=i, value=title)
+            cell.font = self.bold_font
+            cell.border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+            cell.fill = self.header_fill
+        self.ws.column_dimensions['E'].width = 20  # Ширина для программы
+        row += 1
+        return row
+    
+    def _add_shleif_row(self, shleif, row):
+        """Добавить строку шлейфа. Только подключённые (с section_id) или с описанием."""
+        has_section = bool(shleif.get('section_id'))
+        has_desc = bool(shleif.get('description'))
+        if not has_section and not has_desc:
+            return row  # Нет ни раздела, ни описания — мусор
+        self.ws.cell(row=row, column=2, value=shleif['num'])
+        self.ws.cell(row=row, column=2).font = self.regular_font
+        self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=2).alignment = self.wrap
+        self.ws.cell(row=row, column=2).fill = self.light_fill if row % 2 == 0 else self.white_fill
+        
+        # Столбец A (номер прибора) — дублируем border
+        self.ws.cell(row=row, column=1, value='')
+        self.ws.cell(row=row, column=1).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        
+        section_desc = ''
+        if shleif.get('section_id'):
+            section = self.sections.get(shleif['section_id'])
+            if section:
+                section_desc = section['description']
+        
+        self.ws.cell(row=row, column=3, value=section_desc)
+        self.ws.cell(row=row, column=3).font = self.regular_font
+        self.ws.cell(row=row, column=3).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=3).alignment = self.wrap
+        
+        self.ws.cell(row=row, column=4, value=shleif.get('type_name', ''))
+        self.ws.cell(row=row, column=4).font = self.regular_font
+        self.ws.cell(row=row, column=4).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=4).alignment = self.wrap
+        
+        # Столбец E (Программа) — пустой для шлейфов
+        self.ws.cell(row=row, column=5, value='')
+        self.ws.cell(row=row, column=5).font = self.regular_font
+        self.ws.cell(row=row, column=5).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=5).alignment = self.wrap
+        
+        self.ws.cell(row=row, column=6, value=shleif.get('description', ''))
+        self.ws.cell(row=row, column=6).font = self.regular_font
+        self.ws.cell(row=row, column=6).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=6).alignment = self.wrap
+        
+        row += 1
+        return row
+    
+    def _add_relay_row(self, relay, row):
+        """Добавить строку реле. Только реле с программой (program_id != 0)."""
+        if not relay.get('program_id') or relay['program_id'] == 0:
+            return row  # Пропускаем реле без программы
+        self.ws.cell(row=row, column=2, value=f'Рел.{relay["num"]}')
+        self.ws.cell(row=row, column=2).font = self.regular_font
+        self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=2).alignment = self.wrap
+        
+        self.ws.row_dimensions[row].height = 25
+        
+        # Раздел — из section_id реле
+        section_desc = ''
+        if relay.get('section_id'):
+            section = self.sections.get(relay['section_id'])
+            if section:
+                section_desc = section['description']
+        
+        self.ws.cell(row=row, column=3, value=section_desc)
+        self.ws.cell(row=row, column=3).font = self.regular_font
+        self.ws.cell(row=row, column=3).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=3).alignment = self.wrap
+        
+        # Тип шлейфа — пусто
+        self.ws.cell(row=row, column=4, value='')
+        self.ws.cell(row=row, column=4).font = self.regular_font
+        self.ws.cell(row=row, column=4).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=4).alignment = self.wrap
+        
+        # Программа (столбец 5)
+        program_name = relay.get('program_name', '')
+        if program_name:
+            desc = f"Пр. упр: {program_name}"
+        else:
+            desc = relay.get('description', '')
+        
+        self.ws.cell(row=row, column=5, value=desc)
+        self.ws.cell(row=row, column=5).font = self.regular_font
+        self.ws.cell(row=row, column=5).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=5).alignment = self.wrap
+        if len(desc) > 30:
+            self.ws.row_dimensions[row].height = 37
+        
+        # Описание (столбец 6) — выход описания优先, иначе реле
+        output_desc = relay.get('output_desc', '')
+        relay_desc = relay.get('description', '')
+        desc_value = output_desc if output_desc else relay_desc
+        
+        self.ws.cell(row=row, column=6, value=desc_value)
+        self.ws.cell(row=row, column=6).font = self.regular_font
+        self.ws.cell(row=row, column=6).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=6).alignment = self.wrap
+        
+        row += 1
+        return row
+
+    def _add_output_row(self, output, row):
+        """Добавить строку выхода. Только с описанием."""
+        if not output.get('description'):
+            return row  # Пропускаем выходы без описания
+        self.ws.cell(row=row, column=2, value=output['num'])
+        self.ws.cell(row=row, column=2).font = self.regular_font
+        self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=2).alignment = self.wrap
+        
+        section_desc = ''
+        if output.get('section_id'):
+            section = self.sections.get(output['section_id'])
+            if section:
+                section_desc = section['description']
+        
+        self.ws.cell(row=row, column=3, value=section_desc)
+        self.ws.cell(row=row, column=3).font = self.regular_font
+        self.ws.cell(row=row, column=3).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=3).alignment = self.wrap
+        
+        self.ws.cell(row=row, column=6, value=output.get('description', ''))
+        self.ws.cell(row=row, column=6).font = self.regular_font
+        self.ws.cell(row=row, column=6).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=6).alignment = self.wrap
+        
+        row += 1
+        return row
+    
+    def _add_reader_row(self, reader, row):
+        """Добавить строку считывателя. Только с section_id ИЛИ description."""
+        has_section = bool(reader.get('section_id'))
+        has_desc = bool(reader.get('description'))
+        if not has_section and not has_desc:
+            return row  # Нет ни раздела, ни описания — мусор
+        self.ws.cell(row=row, column=2, value=reader['num'])
+        self.ws.cell(row=row, column=2).font = self.regular_font
+        self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=2).alignment = self.wrap
+        
+        section_desc = ''
+        if reader.get('section_id'):
+            section = self.sections.get(reader['section_id'])
+            if section:
+                section_desc = section['description']
+        
+        self.ws.cell(row=row, column=3, value=section_desc)
+        self.ws.cell(row=row, column=3).font = self.regular_font
+        self.ws.cell(row=row, column=3).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=3).alignment = self.wrap
+        
+        self.ws.cell(row=row, column=6, value=reader.get('description', ''))
+        self.ws.cell(row=row, column=6).font = self.regular_font
+        self.ws.cell(row=row, column=6).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
+        self.ws.cell(row=row, column=6).alignment = self.wrap
+        
+        row += 1
+        return row
     
     def set_printer_settings(self, paper_size, orientation):
         """Установить настройки принтера"""

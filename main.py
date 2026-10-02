@@ -3,10 +3,30 @@
 """Точка входа для конвертера С2000-М"""
 
 import sys
+import os
+
+# Fix: кастомный Python 3.14 ищет в Python 3.11 venv первым — там бинарно несовместимо.
+# Добавляем Python 3.14 site-packages до импорта любых библиотек.
+_hermes_tools = os.path.join(os.environ.get('HOME', '/home/mamont'), '.hermes/tools')
+if '/.hermes/tools/python-3.14' in sys.executable:
+    py314_site = os.path.join(_hermes_tools, 'python-3.14.7+202*/lib/python3.14/site-packages')
+    import glob
+    for d in glob.glob(py314_site):
+        if d not in sys.path:
+            sys.path.insert(0, d)
+
+# Fix: системный Python 3.12 — user site-packages
+if '/usr/bin/python3' == sys.executable or 'python3.12' in sys.executable.lower():
+    user_site = os.path.join(os.path.expanduser('~'), '.local/lib/python3.12/site-packages')
+    if not os.path.exists(user_site):
+        user_site = '/usr/lib/python3/dist-packages'
+    if user_site not in sys.path:
+        sys.path.insert(0, user_site)
+
 import argparse
 from cli_config import parse_args
 from config_parser import ConfigParser
-from excel_generator import ExcelGenerator
+from md_generator import generate_md
 from utils import validate_file_path, check_missing_descriptions, format_missing_cells
 
 
@@ -31,12 +51,13 @@ def main():
         print(f"Ошибка: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Парсинг конфигурации
+    # Парсинг конфигурации — теперь ConfigParser строит структурированную модель
     parser = ConfigParser()
     try:
-        parser.parse_file(filepath)
+        devices, raw_lines = parser.parse_file(filepath)
         if args.verbose:
             print(f"Загружено разделов: {len(parser.sections)}")
+            print(f"Приборов: {len(devices)}")
     except FileNotFoundError as e:
         print(f"Ошибка: {e}", file=sys.stderr)
         sys.exit(1)
@@ -47,63 +68,28 @@ def main():
         print(f"Ошибка парсинга: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Генерация Excel
+    # Генерация в зависимости от формата
+    if args.format == 'xlsx':
+        _generate_xlsx(args, parser, devices)
+    else:
+        output = args.output if args.output.endswith('.md') else args.output + '.md'
+        result = generate_md(devices, parser.sections, output)
+        print(f"Сгенерировано {len(devices)} приборов в {output}")
+
+
+def _generate_xlsx(args, parser, devices):
+    """Excel-генерация (вынесена в отдельную функцию)"""
+    from excel_generator import ExcelGenerator
     gen = ExcelGenerator()
     gen.set_config(parser)
+    gen.set_sections(parser.sections)
+    gen.set_devices(devices)
     
-    # Обработка строк конфигурации
-    current_row = 1
+    # Генерация Excel из структурированных данных
     try:
-        for string_f in parser.raw_lines:
-            if args.verbose:
-                print(f"Обрабатываем строку: {string_f[:50]}...")
-            
-            # Пропускаем пустые строки
-            if string_f.find('\n') != -1:
-                string_f = string_f.replace('\n', '').strip()
-            
-            if not string_f:
-                continue
-            
-            # Преобразуем строку в массив
-            str_array = string_f.split(', ')
-            
-            # Нормализация полей
-            j = 0
-            for h in str_array:
-                if h.find('Описание:') != -1:
-                    str_array[j] = h[h.find('Описание:'):].strip()
-                elif h.find('Шлейф:') != -1:
-                    str_array[j] = h[h.find('Шлейф:'):].strip()
-                elif h.find('Раздел:') != -1:
-                    str_array[j] = h[h.find('Раздел:'):].strip()
-                elif h.find('Время') != -1:
-                    str_array[j] = h[h.find('Время'):].strip()
-                elif h.find('Выход:') != -1:
-                    str_array[j] = h[h.find('Выход:'):].strip()
-                elif h.find('Реле:') != -1:
-                    str_array[j] = h[h.find('Реле:'):].strip()
-                j += 1
-            
-            # Обработка типа строки
-            if str_array and str_array[0].find('Конфигурация') != -1:
-                current_row = gen.add_title(str_array, current_row)
-            elif str_array and str_array[0].find('Версия:') != -1:
-                current_row = gen.add_title(str_array, current_row)
-            elif len(str_array) >= 3 and str_array[0].find('Адрес:') != -1:
-                current_row = gen.add_address_row(str_array, current_row)
-            elif len(str_array) >= 3 and str_array[0].find('Шлейф:') != -1:
-                current_row = gen.add_output_row(str_array, current_row)
-            elif len(str_array) >= 2 and str_array[0].find('Выход:') != -1:
-                current_row = gen.add_output_row(str_array, current_row)
-            elif len(str_array) >= 2 and str_array[0].find('Реле:') != -1:
-                current_row = gen.add_output_row(str_array, current_row)
-            
-            if args.verbose:
-                print(f"  Текущая строка: {current_row}")
-        
+        current_row = gen.generate(devices)
     except Exception as e:
-        print(f"Ошибка обработки: {e}", file=sys.stderr)
+        print(f"Ошибка генерации: {e}", file=sys.stderr)
         sys.exit(1)
     
     # Сохранение файла
@@ -128,11 +114,13 @@ def main():
         gen.set_columns_width()
         
         # Открытие файла
-        gen.open_file(args.output)
+        if not args.no_open:
+            gen.open_file(args.output)
         
     except Exception as e:
         print(f"Ошибка сохранения: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 
 if __name__ == '__main__':

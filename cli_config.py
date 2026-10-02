@@ -31,6 +31,18 @@ def parse_args():
         help='Проверить наличие описаний'
     )
     
+    parser.add_argument(
+        '--format',
+        choices=['xlsx', 'md'],
+        default='xlsx',
+        help='Формат вывода: xlsx или md (по умолчанию: xlsx)'
+    )
+    parser.add_argument(
+        '--no-open',
+        action='store_true',
+        help='Не открывать выходной файл после генерации'
+    )
+    
     args = parser.parse_args()
     
     # Проверка: если файл не передан — запросить
