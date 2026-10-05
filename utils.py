@@ -15,12 +15,21 @@ def validate_file_path(filepath):
 
 
 def check_missing_descriptions(ws, max_row):
-    """Проверить отсутствующие описания"""
+    """Проверить отсутствующие описания.
+
+    Красим только строки данных: столбец B заполнен (номер шлейфа/реле/
+    выхода/считывателя), а столбец F пуст. Строки-разделители между
+    приборами пропускаем.
+    """
     missing = []
-    for row in ws.iter_rows(min_row=1, min_col=6, max_col=6, max_row=max_row):
-        for cell in row:
-            if cell.value is None:
-                missing.append(cell.row)
+    for r in range(1, max_row + 1):
+        a = ws.cell(row=r, column=1).value
+        b = ws.cell(row=r, column=2).value
+        f = ws.cell(row=r, column=6).value
+        if isinstance(a, int):
+            continue  # строка-заголовок прибора (Адрес)
+        if b not in (None, '') and f in (None, ''):
+            missing.append(r)
     return missing
 
 
@@ -36,6 +45,18 @@ def format_missing_cells(ws, missing_rows):
         cell.value = 'Где описание!!!???'
         cell.font = bold_font
         cell.fill = red_fill
+
+
+def backup_file(filepath):
+    """Создать бэкап файла перед перезаписью: <name>.bak.<YYYYmmdd_HHMMSS>"""
+    import shutil
+    import time
+    if not os.path.exists(filepath):
+        return None
+    stamp = time.strftime('%Y%m%d_%H%M%S')
+    bak = f"{filepath}.bak.{stamp}"
+    shutil.copy2(filepath, bak)
+    return bak
 
 
 def validate_config_lines(lines):

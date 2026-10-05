@@ -6,6 +6,7 @@ import os
 import platform
 import subprocess
 import sys as _sys
+from typing import cast
 
 try:
     from openpyxl import Workbook
@@ -14,6 +15,7 @@ except ImportError:
     from openpyxl import Workbook
 from openpyxl.styles import Font, Border, Side, PatternFill, Alignment, Color
 from openpyxl.worksheet.pagebreak import Break
+from openpyxl.worksheet.worksheet import Worksheet
 
 
 class ExcelGenerator:
@@ -21,7 +23,7 @@ class ExcelGenerator:
     
     def __init__(self):
         self.wb = Workbook()
-        self.ws = self.wb.active
+        self.ws = cast(Worksheet, self.wb.active)
         self.ws.title = 'Адреса, шлейфа'
         self.current_row = 1
         self.sections = {}
@@ -30,7 +32,8 @@ class ExcelGenerator:
     def _setup_styles(self):
         """Настроить стили"""
 #        self.thin = Side(border_style="hair")
-        self.thin = Side(border_style="thin", color="000000")
+        # openpyxl: color="000000" даёт rgb 00000000 (прозрачный) — нужен FF000000
+        self.thin = Side(border_style="thin", color="FF000000")
         self.bold_font = Font(name='Times New Roman', size=10, bold=True)
         self.regular_font = Font(name='Times New Roman', size=10, italic=True)
         self.wrap = Alignment(wrap_text=True)
@@ -241,9 +244,13 @@ class ExcelGenerator:
         )
         
         # Применяем тонкую границу ко всем заполненным ячейкам таблицы
-        # (включая 6-й столбец с описанием, так как max_row рассчитывается для всей таблицы)
+        # (включая 6-й столбец с описанием); строки-разделители пропускаем
         for r in range(1, self.ws.max_row + 1):
-            for c in range(1, 7): 
+            a = self.ws.cell(row=r, column=1).value
+            b = self.ws.cell(row=r, column=2).value
+            if a in (None, '') and b in (None, ''):
+                continue  # пустая строка-разделитель
+            for c in range(1, 7):
                 self.ws.cell(row=r, column=c).border = fine_border
         
         return row
@@ -258,24 +265,32 @@ class ExcelGenerator:
             row = self._add_shleif_row(shleif, row)
         
         # Реле/выходы объединены по номеру
-        # Сначала соберем все реле и добавим к ним описания выходов
+        # Сначала соберем все реле и добавим к ним описания выходов;
+        # выходы, не совпавшие ни с одним реле, остаются standalone
         merged_relays = []
         output_by_num = {}
         for o in dev.outputs:
             output_by_num[o['num']] = o
+        consumed_outputs = set()
         for r in dev.relays:
-            if r.get('program_id') and r['program_id'] != 0:
-                merged = dict(r)
-                if r['num'] in output_by_num:
-                    out = output_by_num[r['num']]
-                    if out.get('description'):
-                        merged['output_desc'] = out['description']
-                    if out.get('section_id') and not merged.get('section_id'):
-                        merged['section_id'] = out['section_id']
-                merged_relays.append(merged)
-        
+            if not (r.get('program_id') and r['program_id'] != 0):
+                continue  # реле не отобразится — выход остаётся standalone
+            merged = dict(r)
+            if r['num'] in output_by_num:
+                out = output_by_num[r['num']]
+                if out.get('description'):
+                    merged['output_desc'] = out['description']
+                if out.get('section_id') and not merged.get('section_id'):
+                    merged['section_id'] = out['section_id']
+                consumed_outputs.add(r['num'])
+            merged_relays.append(merged)
+
         for relay in merged_relays:
             row = self._add_relay_row(relay, row)
+
+        # Стендаун-выходы (нет реле с тем же номером) — раньше терялись
+        for num in sorted(n for n in output_by_num if n not in consumed_outputs):
+            row = self._add_output_row(output_by_num[num], row)
         
         # Считыватели
         for reader in dev.readers:
@@ -436,10 +451,10 @@ class ExcelGenerator:
         return row
 
     def _add_output_row(self, output, row):
-        """Добавить строку выхода. Только с описанием."""
-        if not output.get('description'):
-            return row  # Пропускаем выходы без описания
-        self.ws.cell(row=row, column=2, value=output['num'])
+        """Добавить строку выхода. Только с описанием или section_id."""
+        if not output.get('description') and not output.get('section_id'):
+            return row  # Пропускаем выходы без описания и раздела
+        self.ws.cell(row=row, column=2, value=f'Вых.{output["num"]}')
         self.ws.cell(row=row, column=2).font = self.regular_font
         self.ws.cell(row=row, column=2).border = Border(top=self.thin, bottom=self.thin, left=self.thin, right=self.thin)
         self.ws.cell(row=row, column=2).alignment = self.wrap

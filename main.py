@@ -27,7 +27,7 @@ import argparse
 from cli_config import parse_args
 from config_parser import ConfigParser
 from md_generator import generate_md
-from utils import validate_file_path, check_missing_descriptions, format_missing_cells
+from utils import validate_file_path, check_missing_descriptions, format_missing_cells, backup_file
 
 
 def main():
@@ -92,34 +92,35 @@ def _generate_xlsx(args, parser, devices):
         print(f"Ошибка генерации: {e}", file=sys.stderr)
         sys.exit(1)
     
+    # Настройка страницы — ДО сохранения
+    gen.set_printer_settings(gen.ws.PAPERSIZE_A4, gen.ws.ORIENTATION_PORTRAIT)
+    gen.set_page_breaks()
+    gen.set_view_mode('pageBreakPreview')
+    gen.hide_columns(['E'])
+    gen.set_columns_width()
+
+    # Проверка отсутствующих описаний (до сохранения, чтобы не резать файл дважды)
+    if args.check:
+        missing = check_missing_descriptions(gen.ws, current_row - 1)
+        if missing:
+            print(f"Обнаружено {len(missing)} строк без описаний")
+            format_missing_cells(gen.ws, missing)
+        # Бэкап до перезаписи существующего файла
+        bak = backup_file(args.output)
+        if bak:
+            print(f"Бэкап: {bak}")
+
     # Сохранение файла
     try:
         gen.save(args.output)
         print(f"Файл сохранён: {args.output}")
-        
-        # Проверка отсутствующих описаний
-        if args.check:
-            missing = check_missing_descriptions(gen.ws, current_row - 1)
-            if missing:
-                print(f"Обнаружено {len(missing)} строк без описаний")
-                format_missing_cells(gen.ws, missing)
-                gen.save(args.output)
-                print(f"Обновлённый файл: {args.output}")
-        
-        # Настройка страницы
-        gen.set_printer_settings(gen.ws.PAPERSIZE_A4, gen.ws.ORIENTATION_PORTRAIT)
-        gen.set_page_breaks()
-        gen.set_view_mode('pageBreakPreview')
-        gen.hide_columns(['E'])
-        gen.set_columns_width()
-        
-        # Открытие файла
-        if not args.no_open:
-            gen.open_file(args.output)
-        
     except Exception as e:
         print(f"Ошибка сохранения: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Открытие файла
+    if not args.no_open:
+        gen.open_file(args.output)
 
 
 

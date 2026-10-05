@@ -161,11 +161,22 @@ class ConfigParser:
         if not encoding_found:
             raise UnicodeDecodeError(f"Не удалось определить кодировку файла: {filepath}")
 
-        # Парсим разделы
+        # Парсим разделы:
+        # 1) [Разделы] — нормальный источник (Описание в кавычках)
+        # 2) остальные строки с 'Раздел:' — fallback для аномальных файлов
+        in_sections = False
         for line in self.raw_lines:
             line = line.strip()
-            if 'Раздел:' in line and 'Описание:' in line:
-                parts = line.split(',')
+            if not line:
+                continue
+            if line == '[Разделы]':
+                in_sections = True
+                continue
+            if line.startswith('[') and in_sections:
+                in_sections = False
+                continue
+            if in_sections and 'Раздел:' in line:
+                parts = line.split(',', 1)
                 if len(parts) >= 2:
                     try:
                         section_id = int(parts[0].replace(' ', '').replace('Раздел:', ''))
@@ -178,10 +189,47 @@ class ConfigParser:
                         }
                     except (ValueError, IndexError):
                         pass
+            elif not in_sections and 'Раздел:' in line and 'Описание:' in line:
+                parts = line.split(',', 1)
+                if len(parts) >= 2:
+                    try:
+                        section_id = int(parts[0].replace(' ', '').replace('Раздел:', ''))
+                        description = parts[1].split('Описание:', 1)[1].strip().strip('"')
+                        self.sections[section_id] = {
+                            'id': section_id,
+                            'description': description
+                        }
+                    except (ValueError, IndexError):
+                        pass
+
+        # Типы приборов из файла ([Типы_приборов]) — источник правды;
+        # словарь DEVICE_TYPES остаётся fallback для неизвестных id
+        self._parse_device_types()
 
         # Строим структурированную модель
         devices = self._parse_devices()
         return devices, self.raw_lines
+
+    def _parse_device_types(self):
+        """Парсит [Типы_приборов]: 'Тип_прибора: N, ..., Название: "..."'"""
+        in_types = False
+        for line in self.raw_lines:
+            line = line.strip()
+            if line == '[Типы_приборов]':
+                in_types = True
+                continue
+            if line.startswith('[') and in_types:
+                in_types = False
+                continue
+            if not in_types or 'Тип_прибора:' not in line or 'Название:' not in line:
+                continue
+            try:
+                type_id = int(line.split('Тип_прибора:', 1)[1].split(',', 1)[0].strip())
+                name = line.split('Название:', 1)[1].strip().strip('"')
+                if type_id > 0:
+                    self.DEVICE_TYPES[type_id] = name
+            except (ValueError, IndexError):
+                pass
 
     def _parse_devices(self):
         """Парсит raw_lines и возвращает список приборов с подчинёнными элементами"""
@@ -189,6 +237,7 @@ class ConfigParser:
         current_dev = None
         in_devices_section = False
         pending = None  # 'shleif', 'relay', 'output', 'reader', None
+        stop_at = ('[Уровни', '[Привязка')  # секции, закрывающие [Приборы]
 
         for raw_line in self.raw_lines:
             line = raw_line.strip()
@@ -199,12 +248,15 @@ class ConfigParser:
                 in_devices_section = True
                 pending = None
                 continue
-            if '[Уровни' in line or '[Привязка' in line:
-                # Добавляем последний прибор перед выходом
+            if line.startswith(stop_at):
+                # Закрывающая секция: добавляем последний прибор и
+                # продолжаем (без break) — в аномальном порядке секций
+                # данные после неё не теряются молча
                 if current_dev:
                     devices.append(current_dev)
+                    current_dev = None
                 in_devices_section = False
-                break
+                continue
             if not in_devices_section:
                 continue
 
