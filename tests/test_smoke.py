@@ -6,7 +6,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TEST_CFG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test.cfg')
+TEST_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures', 'test_smoke.cfg')
 
 from config_parser import ConfigParser
 
@@ -28,7 +28,7 @@ def test_parse_test_cfg():
 
     # Поля dev1
     assert dev1.version == '2.01'
-    assert dev1.description == 'Тестовый КПБ'
+    assert dev1.description == 'Контроллер 1'
     assert len(dev1.shleifs) == 1
     assert len(dev1.outputs) == 2
     assert dev1.outputs[0]['description'] == 'Сирена'

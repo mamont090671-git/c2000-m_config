@@ -160,6 +160,8 @@ cython_debug/
 #.idea/
 
 # Project artifacts
+out.md
+out.xlsx
 xxx.xlsx
 *.bak.*
 get-docker.sh
