@@ -1,4 +1,4 @@
-name: Build Windows .exe
+name: Build releases
 
 on:
   release:
@@ -10,7 +10,19 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: win
+            ext: .exe
+            data_sep: ";"
+          - os: ubuntu-latest
+            name: linux
+            ext: ""
+            data_sep: ":"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,24 +39,23 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --name c2000-m-config `
+          pyinstaller --name c2000-m-config${{ matrix.ext }} `
             --onefile `
-            --windowed `
-            --add-data "tests/fixtures;tests/fixtures" `
+            --add-data "tests/fixtures${{ matrix.data_sep }}tests/fixtures" `
             main.py
 
       - name: Upload release asset
         if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: dist/c2000-m-config.exe
-          asset_name: c2000-m-config.exe
-          asset_content_type: application/octet-stream
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} \
+            dist/c2000-m-config${{ matrix.ext }} \
+            --repo ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload workflow artifact
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: c2000-m-config.exe
-          path: dist/c2000-m-config.exe
+          name: c2000-m-config-${{ matrix.name }}${{ matrix.ext }}
+          path: dist/c2000-m-config${{ matrix.ext }}
