@@ -5,7 +5,7 @@ CLI утилита для конвертации конфигурации С2000
 ## Установка
 
 ```bash
-pip install openpyxl
+pip install -r requirements.txt
 ```
 
 ## Использование
@@ -27,16 +27,16 @@ python3 main.py CONFIG_FILE [-o OUTPUT] [-v] [--check] [--format xlsx|md] [--no-
 
 ```bash
 # Excel по умолчанию
-python3 main.py 020926.TXT -o out.xlsx
+python3 main.py path/to/config.txt -o out.xlsx
 
 # Markdown
-python3 main.py 020926.TXT --format md -o out.md
+python3 main.py path/to/config.txt --format md -o out.md
 
 # С проверкой описаний
-python3 main.py 020926.TXT --check
+python3 main.py path/to/config.txt --check
 
 # Без открытия файла
-python3 main.py 020926.TXT --format xlsx --no-open
+python3 main.py path/to/config.txt --format xlsx --no-open
 ```
 
 ## Формат конфигурации
@@ -53,6 +53,10 @@ c2000-m_config/
 ├── excel_generator.py   # Генератор Excel (openpyxl)
 ├── md_generator.py      # Генератор Markdown
 ├── utils.py             # Утилиты и функции валидации
+├── requirements.txt     # Зависимости
+├── tests/               # Smoke-тесты
+│   ├── test_smoke.py
+│   └── fixtures/
 └── README.md
 ```
 
@@ -76,7 +80,7 @@ CLI интерфейс на основе argparse. Аргументы: config_fi
 
 ### md_generator.py
 
-Класс `generate_md()` для вывода списка:
+Функция `generate_md()` для вывода списка:
 - **Адрес** — тип прибора — версия
 - `Шл.N` — раздел — тип шлейфа — описание
 - `Рел.N` — раздел — программа — описание
