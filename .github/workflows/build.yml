@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +34,7 @@ jobs:
       - name: Upload release asset
         if: github.event_name == 'release'
         run: |
-          gh release upload v0.1.1 dist/c2000-m-config.exe --repo ${{ github.repository }}
+          gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config.exe --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -46,6 +47,7 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build-windows
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +71,7 @@ jobs:
       - name: Upload release asset
         if: github.event_name == 'release'
         run: |
-          gh release upload v0.1.1 dist/c2000-m-config --repo ${{ github.repository }}
+          gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
