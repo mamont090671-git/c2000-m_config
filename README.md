@@ -4,8 +4,29 @@ CLI утилита для конвертации конфигурации С2000
 
 ## Установка
 
+### Готовые бинарники (без Python)
+
+Скачайте из [Releases](https://github.com/mamont090671-git/c2000-m_config/releases):
+
+| Платформа | Файл |
+|-----------|------|
+| Windows   | `c2000-m-config.exe` |
+| Linux     | `c2000-m-config` |
+
+**Запуск:**
+```bash
+# Windows
+c2000-m-config.exe config.txt -o out.xlsx
+
+# Linux
+./c2000-m-config config.txt --format md
+```
+
+### Из исходников
+
 ```bash
 pip install -r requirements.txt
+python3 main.py config.txt
 ```
 
 ## Использование

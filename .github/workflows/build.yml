@@ -31,10 +31,16 @@ jobs:
             --add-data "tests/fixtures;tests/fixtures" `
             main.py
 
+      - name: Generate SHA256
+        run: |
+          certutil -hashfile dist\c2000-m-config.exe SHA256 | findstr /v "Hash" | findstr /v "SHA256" > dist/c2000-m-config.exe.sha256
+          type dist\c2000-m-config.exe.sha256
+
       - name: Upload release asset
         if: github.event_name == 'release'
         run: |
           gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config.exe --repo ${{ github.repository }}
+          gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config.exe.sha256 --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,10 +74,16 @@ jobs:
             --add-data "tests/fixtures:tests/fixtures" \
             main.py
 
+      - name: Generate SHA256
+        run: |
+          sha256sum dist/c2000-m-config > dist/c2000-m-config.sha256
+          cat dist/c2000-m-config.sha256
+
       - name: Upload release asset
         if: github.event_name == 'release'
         run: |
           gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config --repo ${{ github.repository }}
+          gh release upload ${{ github.event.release.tag_name }} dist/c2000-m-config.sha256 --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
