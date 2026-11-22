@@ -14,12 +14,26 @@ CLI утилита для конвертации конфигурации С2000
 | Linux     | `c2000-m-config` |
 
 **Запуск:**
-```bash
-# Windows
-c2000-m-config.exe config.txt -o out.xlsx
 
-# Linux
+#### Windows
+
+```cmd
+c2000-m-config.exe config.txt
+c2000-m-config.exe config.txt -o out.xlsx
+c2000-m-config.exe config.txt --format md
+c2000-m-config.exe config.txt --check
+c2000-m-config.exe config.txt --no-open
+```
+
+#### Linux
+
+```bash
+chmod +x c2000-m-config
+./c2000-m-config config.txt
+./c2000-m-config config.txt -o out.xlsx
 ./c2000-m-config config.txt --format md
+./c2000-m-config config.txt --check
+./c2000-m-config config.txt --no-open
 ```
 
 ### Из исходников
